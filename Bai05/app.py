@@ -3,6 +3,7 @@ import sqlite3
 
 app = Flask(__name__)
 DB_FILE = "library.db"
+
 # ------------------------------
 # Hàm tiện ích
 # ------------------------------
@@ -49,6 +50,41 @@ def get_books():
         "data": books
     })
 
+
+# ------------------------------
+# ✅ Endpoint: Lấy danh sách thành viên + phân trang + tìm kiếm theo tên/email
+# ------------------------------
+@app.route("/members", methods=["GET"])
+def get_members():
+    name = request.args.get("name")
+    email = request.args.get("email")
+    limit = int(request.args.get("limit", 10))
+    offset = int(request.args.get("offset", 0))
+
+    query = "SELECT * FROM Member WHERE 1=1"
+    params = []
+
+    if name:
+        query += " AND name LIKE ?"
+        params.append(f"%{name}%")
+    if email:
+        query += " AND email LIKE ?"
+        params.append(f"%{email}%")
+
+    query += " LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    rows = query_db(query, params)
+    members = [dict(row) for row in rows]
+
+    return jsonify({
+        "limit": limit,
+        "offset": offset,
+        "count": len(members),
+        "data": members
+    })
+
+
 # ------------------------------
 # Endpoint: Lấy thông tin 1 sách
 # ------------------------------
@@ -58,6 +94,16 @@ def get_book(book_id):
     if row:
         return jsonify(dict(row))
     return jsonify({"error": "Book not found"}), 404
+
+# ------------------------------
+# Endpoint: Lấy thông tin 1 người
+# ------------------------------
+@app.route("/members/<int:member_id>", methods=["GET"])
+def get_member(member_id):
+    row = query_db("SELECT * FROM Member WHERE id = ?", [member_id], one=True)
+    if row:
+        return jsonify(dict(row))
+    return jsonify({"error": "Member not found"}), 404
 
 
 # ------------------------------
@@ -90,7 +136,7 @@ def get_member_loans(member_id):
 
 
 # ------------------------------
-# Khởi tạo DB & chạy app
+# Khởi tạo DB & seed dữ liệu
 # ------------------------------
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -127,6 +173,7 @@ def init_db():
                 )''')
     conn.commit()
     conn.close()
+
 
 def seed_data():
     conn = sqlite3.connect(DB_FILE)
@@ -182,8 +229,11 @@ def seed_data():
     conn.commit()
     conn.close()
 
-# Gọi hàm seed trước khi chạy app
+
+# ------------------------------
+# Chạy app
+# ------------------------------
 if __name__ == "__main__":
     init_db()
-    seed_data()  # <--- thêm dòng này
+    seed_data()
     app.run(debug=True)

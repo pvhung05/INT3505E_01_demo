@@ -1,18 +1,48 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required
+from flasgger import Swagger
 
 app = Flask(__name__)
-CORS(app)  # Cho phép Swagger UI (chạy khác port) gọi được API này
+CORS(app)
 
-# Cơ sở dữ liệu mẫu
+# -------------------------------
+# Cấu hình JWT và Swagger
+# -------------------------------
+app.config["JWT_SECRET_KEY"] = "super-secret-key"
+app.config["SWAGGER"] = {
+    "title": "Book Management API",
+    "uiversion": 3
+}
+
+jwt = JWTManager(app)
+swagger = Swagger(app, template_file='openapi.yaml')
+
+# -------------------------------
+# Database giả lập
+# -------------------------------
 BOOKS = [
     {"id": 1, "title": "Clean Code", "author": "Robert C. Martin", "year": 2008},
     {"id": 2, "title": "The Pragmatic Programmer", "author": "Andrew Hunt", "year": 1999},
     {"id": 3, "title": "Refactoring", "author": "Martin Fowler", "year": 1999}
 ]
 
-# Lấy danh sách tất cả sách (có thể lọc & giới hạn)
-@app.route('/api/books', methods=['GET'])
+# -------------------------------
+# Endpoint đăng nhập (JWT)
+# -------------------------------
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    if data.get("username") == "admin" and data.get("password") == "123":
+        token = create_access_token(identity="admin")
+        return jsonify(access_token=token)
+    return jsonify({"msg": "Sai thông tin đăng nhập"}), 401
+
+# -------------------------------
+# Các endpoint có bảo vệ JWT
+# -------------------------------
+@app.route('/books', methods=['GET'])
+@jwt_required()
 def get_books():
     author = request.args.get('author')
     limit = int(request.args.get('limit', 10))
@@ -21,16 +51,16 @@ def get_books():
         books = [b for b in books if author.lower() in b['author'].lower()]
     return jsonify(books[:limit])
 
-# Lấy thông tin sách theo ID
-@app.route('/api/books/<int:id>', methods=['GET'])
+@app.route('/books/<int:id>', methods=['GET'])
+@jwt_required()
 def get_book(id):
     for book in BOOKS:
         if book['id'] == id:
             return jsonify(book)
     return jsonify({"message": "Không tìm thấy"}), 404
 
-# Thêm sách mới
-@app.route('/api/books', methods=['POST'])
+@app.route('/books', methods=['POST'])
+@jwt_required()
 def add_book():
     data = request.json
     new_book = {
@@ -42,8 +72,8 @@ def add_book():
     BOOKS.append(new_book)
     return jsonify(new_book), 201
 
-# Cập nhật thông tin sách
-@app.route('/api/books/<int:id>', methods=['PUT'])
+@app.route('/books/<int:id>', methods=['PUT'])
+@jwt_required()
 def update_book(id):
     data = request.json
     for book in BOOKS:
@@ -52,8 +82,8 @@ def update_book(id):
             return jsonify(book)
     return jsonify({"message": "Không tìm thấy"}), 404
 
-# Xóa sách
-@app.route('/api/books/<int:id>', methods=['DELETE'])
+@app.route('/books/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_book(id):
     global BOOKS
     BOOKS = [b for b in BOOKS if b['id'] != id]

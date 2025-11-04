@@ -1,0 +1,1 @@
+from openapi_server.controllers import product_controller

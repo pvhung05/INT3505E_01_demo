@@ -1,0 +1,145 @@
+openapi: 3.0.3
+info:
+  title: Product API
+  description: API quản lý sản phẩm, có CRUD đầy đủ.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api
+    description: Local server
+
+paths:
+  /products:
+    get:
+      summary: Lấy danh sách sản phẩm
+      operationId: getProducts
+      tags: [Product]
+      responses:
+        '200':
+          description: Danh sách sản phẩm
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+
+    post:
+      summary: Tạo sản phẩm mới
+      operationId: createProduct
+      tags: [Product]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+      responses:
+        '201':
+          description: Đã tạo thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+
+  /products/{id}:
+    get:
+      summary: Lấy thông tin sản phẩm theo ID
+      operationId: getProductById
+      tags: [Product]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Chi tiết sản phẩm
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          description: Không tìm thấy sản phẩm
+
+    put:
+      summary: Cập nhật sản phẩm
+      operationId: updateProduct
+      tags: [Product]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+      responses:
+        '200':
+          description: Cập nhật thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          description: Không tìm thấy sản phẩm
+
+    delete:
+      summary: Xóa sản phẩm
+      operationId: deleteProduct
+      tags: [Product]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Đã xóa thành công
+        '404':
+          description: Không tìm thấy sản phẩm
+
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 64b2f86e7b9d1a001f4f5d9c
+        name:
+          type: string
+          example: iPhone 16 Pro
+        price:
+          type: number
+          format: float
+          example: 29990000
+        description:
+          type: string
+          example: "Điện thoại cao cấp mới nhất của Apple"
+      required:
+        - id
+        - name
+        - price
+
+    ProductInput:
+      type: object
+      properties:
+        name:
+          type: string
+          example: MacBook Air M3
+        price:
+          type: number
+          format: float
+          example: 32990000
+        description:
+          type: string
+          example: "Laptop siêu nhẹ hiệu năng cao"
+      required:
+        - name
+        - price

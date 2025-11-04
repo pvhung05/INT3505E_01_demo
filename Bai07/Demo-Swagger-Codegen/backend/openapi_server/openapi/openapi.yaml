@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  description: "API quản lý sản phẩm, có CRUD đầy đủ."
+  title: Product API
+  version: 1.0.0
+servers:
+- description: Local server
+  url: http://localhost:8080/api
+paths:
+  /products:
+    get:
+      operationId: get_products
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Product"
+                type: array
+          description: Danh sách sản phẩm
+      summary: Lấy danh sách sản phẩm
+      tags:
+      - Product
+      x-openapi-router-controller: openapi_server.controllers.product_controller
+    post:
+      operationId: create_product
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+          description: Đã tạo thành công
+      summary: Tạo sản phẩm mới
+      tags:
+      - Product
+      x-openapi-router-controller: openapi_server.controllers.product_controller
+  /products/{id}:
+    delete:
+      operationId: delete_product
+      parameters:
+      - explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "204":
+          description: Đã xóa thành công
+        "404":
+          description: Không tìm thấy sản phẩm
+      summary: Xóa sản phẩm
+      tags:
+      - Product
+      x-openapi-router-controller: openapi_server.controllers.product_controller
+    get:
+      operationId: get_product_by_id
+      parameters:
+      - explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+          description: Chi tiết sản phẩm
+        "404":
+          description: Không tìm thấy sản phẩm
+      summary: Lấy thông tin sản phẩm theo ID
+      tags:
+      - Product
+      x-openapi-router-controller: openapi_server.controllers.product_controller
+    put:
+      operationId: update_product
+      parameters:
+      - explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+          description: Cập nhật thành công
+        "404":
+          description: Không tìm thấy sản phẩm
+      summary: Cập nhật sản phẩm
+      tags:
+      - Product
+      x-openapi-router-controller: openapi_server.controllers.product_controller
+components:
+  schemas:
+    Product:
+      example:
+        price: 29990000
+        name: iPhone 16 Pro
+        description: Điện thoại cao cấp mới nhất của Apple
+        id: 64b2f86e7b9d1a001f4f5d9c
+      properties:
+        id:
+          example: 64b2f86e7b9d1a001f4f5d9c
+          title: id
+          type: string
+        name:
+          example: iPhone 16 Pro
+          title: name
+          type: string
+        price:
+          example: 29990000
+          format: float
+          title: price
+          type: number
+        description:
+          example: Điện thoại cao cấp mới nhất của Apple
+          title: description
+          type: string
+      required:
+      - id
+      - name
+      - price
+      title: Product
+      type: object
+    ProductInput:
+      example:
+        price: 32990000
+        name: MacBook Air M3
+        description: Laptop siêu nhẹ hiệu năng cao
+      properties:
+        name:
+          example: MacBook Air M3
+          title: name
+          type: string
+        price:
+          example: 32990000
+          format: float
+          title: price
+          type: number
+        description:
+          example: Laptop siêu nhẹ hiệu năng cao
+          title: description
+          type: string
+      required:
+      - name
+      - price
+      title: ProductInput
+      type: object

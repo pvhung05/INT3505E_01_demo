@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import sqlite3
+import base64, json
 
 app = Flask(__name__)
 DB_FILE = "library.db"
@@ -17,11 +18,11 @@ def query_db(query, args=(), one=False):
     return (rv[0] if rv else None) if one else rv
 
 
-# ------------------------------
-# Endpoint: Lấy danh sách sách + tìm kiếm + phân trang
-# ------------------------------
+# ======================================================
+# 1️⃣ OFFSET–LIMIT PAGINATION (GIỮ NGUYÊN)
+# ======================================================
 @app.route("/books", methods=["GET"])
-def get_books():
+def get_books_offset():
     author = request.args.get("author")
     category = request.args.get("category")
     limit = int(request.args.get("limit", 10))
@@ -44,6 +45,7 @@ def get_books():
     books = [dict(row) for row in rows]
 
     return jsonify({
+        "type": "offset-limit",
         "limit": limit,
         "offset": offset,
         "count": len(books),
@@ -51,9 +53,86 @@ def get_books():
     })
 
 
-# ------------------------------
-# ✅ Endpoint: Lấy danh sách thành viên + phân trang + tìm kiếm theo tên/email
-# ------------------------------
+# ======================================================
+# 2️⃣ PAGE-BASED PAGINATION
+# ======================================================
+@app.route("/books/page", methods=["GET"])
+def get_books_page():
+    author = request.args.get("author")
+    category = request.args.get("category")
+    page = int(request.args.get("page", 1))
+    size = int(request.args.get("size", 10))
+    offset = (page - 1) * size
+
+    query = "SELECT * FROM Book WHERE 1=1"
+    params = []
+
+    if author:
+        query += " AND author LIKE ?"
+        params.append(f"%{author}%")
+    if category:
+        query += " AND category LIKE ?"
+        params.append(f"%{category}%")
+
+    query += " LIMIT ? OFFSET ?"
+    params.extend([size, offset])
+
+    rows = query_db(query, params)
+    books = [dict(row) for row in rows]
+
+    total = query_db("SELECT COUNT(*) as total FROM Book", one=True)["total"]
+    total_pages = (total + size - 1) // size
+
+    return jsonify({
+        "type": "page-based",
+        "page": page,
+        "size": size,
+        "total_pages": total_pages,
+        "count": len(books),
+        "data": books
+    })
+
+
+# ======================================================
+# 3️⃣ CURSOR-BASED PAGINATION
+# ======================================================
+@app.route("/books/cursor", methods=["GET"])
+def get_books_cursor():
+    limit = int(request.args.get("limit", 5))
+    cursor = request.args.get("cursor")
+
+    # Giải mã cursor (nếu có)
+    last_id = 0
+    if cursor:
+        try:
+            decoded = base64.b64decode(cursor).decode("utf-8")
+            last_id = json.loads(decoded).get("last_id", 0)
+        except Exception:
+            return jsonify({"error": "Invalid cursor"}), 400
+
+    # Lấy dữ liệu mới hơn cursor
+    query = "SELECT * FROM Book WHERE id > ? ORDER BY id ASC LIMIT ?"
+    rows = query_db(query, [last_id, limit])
+    books = [dict(row) for row in rows]
+
+    # Tạo cursor mới nếu còn dữ liệu
+    next_cursor = None
+    if len(books) == limit:
+        last_book_id = books[-1]["id"]
+        cursor_data = json.dumps({"last_id": last_book_id})
+        next_cursor = base64.b64encode(cursor_data.encode()).decode()
+
+    return jsonify({
+        "type": "cursor-based",
+        "limit": limit,
+        "next_cursor": next_cursor,
+        "data": books
+    })
+
+
+# ======================================================
+# Các endpoint cũ (giữ nguyên)
+# ======================================================
 @app.route("/members", methods=["GET"])
 def get_members():
     name = request.args.get("name")
@@ -85,9 +164,6 @@ def get_members():
     })
 
 
-# ------------------------------
-# Endpoint: Lấy thông tin 1 sách
-# ------------------------------
 @app.route("/books/<int:book_id>", methods=["GET"])
 def get_book(book_id):
     row = query_db("SELECT * FROM Book WHERE id = ?", [book_id], one=True)
@@ -95,9 +171,7 @@ def get_book(book_id):
         return jsonify(dict(row))
     return jsonify({"error": "Book not found"}), 404
 
-# ------------------------------
-# Endpoint: Lấy thông tin 1 người
-# ------------------------------
+
 @app.route("/members/<int:member_id>", methods=["GET"])
 def get_member(member_id):
     row = query_db("SELECT * FROM Member WHERE id = ?", [member_id], one=True)
@@ -106,9 +180,6 @@ def get_member(member_id):
     return jsonify({"error": "Member not found"}), 404
 
 
-# ------------------------------
-# Endpoint: Lấy danh sách phiếu mượn của 1 thành viên
-# ------------------------------
 @app.route("/members/<int:member_id>/loans", methods=["GET"])
 def get_member_loans(member_id):
     status = request.args.get("status")
@@ -135,9 +206,9 @@ def get_member_loans(member_id):
     })
 
 
-# ------------------------------
+# ======================================================
 # Khởi tạo DB & seed dữ liệu
-# ------------------------------
+# ======================================================
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -178,26 +249,27 @@ def init_db():
 def seed_data():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-
-    # Xóa dữ liệu cũ (nếu muốn reset)
     c.execute("DELETE FROM Loan")
     c.execute("DELETE FROM Member")
     c.execute("DELETE FROM Book")
     c.execute("DELETE FROM Librarian")
 
-    # Thêm dữ liệu Book
     c.executemany("""
         INSERT INTO Book (title, author, category, status)
         VALUES (?, ?, ?, ?)
     """, [
-        ('Dế Mèn Phiêu Lưu Ký', 'Tô Hoài', 'Thiếu nhi', 'available'),
-        ('O Chuột', 'Tô Hoài', 'Văn học', 'borrowed'),
-        ('Harry Potter and the Philosopher\'s Stone', 'J.K. Rowling', 'Fantasy', 'available'),
-        ('To Kill a Mockingbird', 'Harper Lee', 'Classic', 'available'),
-        ('The Great Gatsby', 'F. Scott Fitzgerald', 'Classic', 'borrowed'),
+        ('Book A', 'Author 1', 'Category X', 'available'),
+        ('Book B', 'Author 2', 'Category Y', 'available'),
+        ('Book C', 'Author 3', 'Category Z', 'available'),
+        ('Book D', 'Author 4', 'Category X', 'available'),
+        ('Book E', 'Author 5', 'Category Y', 'available'),
+        ('Book F', 'Author 6', 'Category Z', 'available'),
+        ('Book G', 'Author 7', 'Category X', 'available'),
+        ('Book H', 'Author 8', 'Category Y', 'available'),
+        ('Book I', 'Author 9', 'Category Z', 'available'),
+        ('Book J', 'Author 10', 'Category X', 'available')
     ])
 
-    # Thêm dữ liệu Member
     c.executemany("""
         INSERT INTO Member (name, email)
         VALUES (?, ?)
@@ -207,32 +279,13 @@ def seed_data():
         ('Lê Văn C', 'vanc@example.com')
     ])
 
-    # Thêm dữ liệu Librarian
-    c.executemany("""
-        INSERT INTO Librarian (name, email, employee_code)
-        VALUES (?, ?, ?)
-    """, [
-        ('Phạm Thị Thư', 'thu.librarian@example.com', 'EMP001'),
-        ('Ngô Văn Minh', 'minh.lib@example.com', 'EMP002')
-    ])
-
-    # Thêm dữ liệu Loan
-    c.executemany("""
-        INSERT INTO Loan (book_id, member_id, borrow_date, return_date, status)
-        VALUES (?, ?, ?, ?, ?)
-    """, [
-        (1, 1, '2025-10-01', '2025-10-10', 'returned'),
-        (2, 1, '2025-10-05', None, 'borrowed'),
-        (5, 2, '2025-10-07', None, 'overdue')
-    ])
-
     conn.commit()
     conn.close()
 
 
-# ------------------------------
+# ======================================================
 # Chạy app
-# ------------------------------
+# ======================================================
 if __name__ == "__main__":
     init_db()
     seed_data()
